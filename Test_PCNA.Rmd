@@ -1,0 +1,130 @@
+---
+title: "Testing_Phylo"
+author: "Niklas Schandry"
+date: "17 9 2020"
+output: html_document
+---
+
+# About
+
+This document is a basic reproduction of the phylogenetics course script.
+
+# Setting up
+
+```{r eval = F}
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install("DECIPHER")
+BiocManager::install("phangorn")
+BiocManager::install("ggtree")
+install.packages("tidyverse")
+```
+
+```{r load libraries}
+library(tidyverse)
+library(magrittr)
+library(Biostrings)
+library(seqinr)
+library(DECIPHER)
+library(phangorn)
+```
+
+# Analysis
+
+```{r align sequences}
+## Read sequences from fasta file as an Amino Acid Stringset
+seqs <- readAAStringSet("PCNA_Seqs.fasta")
+
+## Align sequences in the stringset using decipher. 
+seqs_aligned <- DECIPHER::AlignSeqs(seqs, 
+                                    gapOpening = c(-18, -16),
+                                    gapExtension = c(-2, -1),
+                                    refinements = 3,
+                                    alphabet = AA_STANDARD,
+                                    anchor=NA)
+## Look at the alignemnt
+#seqs_aligned %>% BrowseSeqs()
+```
+
+Below makes use of functions from the phangorn package to compute a tree, etc
+
+## Make distance matrix
+
+```{r compute distance matrix}
+## Convert sequence alignment into a matrix
+seqs_matrix <- as(seqs_aligned, "matrix")
+## Convert this matrix into a phylogenetic dataset
+phang_align <- phyDat(seqs_matrix,
+                      type="AA")
+
+## Compute distances between sequences using maximum likelihood, with WAG model
+dist_m <- dist.ml(phang_align,
+                  model = "WAG") 
+```
+
+## Compute tree
+
+```{r make tree and fit models}
+# Initial neighbour joining tree
+tree_NJ <- NJ(dist_m) # Note, tip order != sequence order
+
+# Fit ml phylogeny
+fit = pml(tree_NJ, data=phang_align) # ML phylogeny
+
+# Not sure if this below is the best approach.
+system.time(
+fit_blos <- optim.pml(fit, model="Blosum62", optInv=TRUE, optGamma=TRUE,
+ rearrangement = "stochastic", control = pml.control(trace = 0)) # Optimize tree
+)
+# A tree takes around 20seconds on this setup. Compare with others?
+
+system.time(
+fit_WAG <- optim.pml(fit, model="WAG", optInv=TRUE, optGamma=TRUE,
+ rearrangement = "stochastic", control = pml.control(trace = 0)) # Optimize tree
+)
+```
+
+## Plot trees
+
+### WAG
+
+```{r load ggtree}
+library(ggtree, quietly = TRUE)
+```
+
+
+```{r reroot tree}
+## Extract tree, specify root (one of the archae in the dataset)
+tree_structure <- fit_WAG$tree %>%
+  as.phylo %>% 
+  root("Staphylothermus_marinus_WP_011838935.1")
+```
+
+
+```{r plot wag tree}
+## Plot tree
+tree_structure %>%
+  ggtree(layout = "rectangular", root.position = 18) +
+  geom_tiplab(geom = "label",align = T, offset = 1, hjust = 1) +
+  theme_tree()
+```
+
+### BLOSUM
+
+```{r reroot blossum tree}
+## Extract tree, specify root (one of the archae in the dataset)
+tree_structure <- fit_blos$tree %>%
+  as.phylo %>% 
+  root("Staphylothermus_marinus_WP_011838935.1")
+```
+
+
+```{r plot blossum}
+## Plot tree
+tree_structure %>%
+  ggtree(layout = "rectangular", root.position = 18) +
+  geom_tiplab(geom = "label",align = T, offset = 1, hjust = 1) +
+  theme_tree()
+```
+
+
