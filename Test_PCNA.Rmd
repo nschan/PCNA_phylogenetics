@@ -43,7 +43,7 @@ seqs_aligned <- DECIPHER::AlignSeqs(seqs,
                                     alphabet = AA_STANDARD,
                                     anchor=NA)
 ## Look at the alignemnt
-#seqs_aligned %>% BrowseSeqs()
+seqs_aligned %>% BrowseSeqs()
 ```
 
 Below makes use of functions from the phangorn package to compute a tree, etc
